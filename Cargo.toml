@@ -1,0 +1,16 @@
+[package]
+name = "fdt"
+version = "0.1.0"
+edition = "2021"
+license = "BSD-3-Clause"
+license_file = "./LICENSE"
+
+[features]
+default = ["alloc"]
+alloc = []
+anyhow = ["dep:anyhow"]
+
+[dependencies]
+anyhow = { version = "1.0", default-features = false, optional = true }
+bytemuck = { version = "1.14.0", features = ["derive"] }
+libsa = { git = "https://github.com/bolt-os/libsa.git", features = ["bytemuck"] }
