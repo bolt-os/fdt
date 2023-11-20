@@ -18,13 +18,13 @@ pub const FDT_PROP: Cell = Cell::new(0x3);
 pub const FDT_NOP: Cell = Cell::new(0x4);
 pub const FDT_END: Cell = Cell::new(0x9);
 
-pub struct Parser<'a> {
-    pub(crate) data: &'a [Cell],
+pub struct Parser<'dtb> {
+    pub(crate) data: &'dtb [Cell],
     pub(crate) position: usize,
 }
 
-impl<'a> Parser<'a> {
-    pub fn new(data: &'a [Cell]) -> Parser<'a> {
+impl<'dtb> Parser<'dtb> {
+    pub fn new(data: &'dtb [Cell]) -> Parser<'dtb> {
         Self { data, position: 0 }
     }
 
@@ -43,14 +43,14 @@ impl<'a> Parser<'a> {
         Ok(cell)
     }
 
-    pub fn take_until(&mut self, mut pred: impl FnMut(Cell) -> bool) -> Result<&'a [Cell]> {
+    pub fn take_until(&mut self, mut pred: impl FnMut(Cell) -> bool) -> Result<&'dtb [Cell]> {
         let start = self.position;
         while !pred(self.bump()?) {}
         Ok(&self.data[start..self.position])
     }
 
     /// Parse a slice of cells
-    pub fn parse_cells(&mut self, len: usize) -> Result<&'a [Cell]> {
+    pub fn parse_cells(&mut self, len: usize) -> Result<&'dtb [Cell]> {
         if self.is_empty() {
             return Err(Error::NoData);
         }
@@ -81,12 +81,12 @@ impl<'a> Parser<'a> {
     ///
     /// Any padding bytes required to make `len` a multiple of 4 are pulled from the stream
     /// but not returned in the result.
-    pub fn parse_bytes(&mut self, len: usize) -> Result<&'a [u8]> {
+    pub fn parse_bytes(&mut self, len: usize) -> Result<&'dtb [u8]> {
         let cells = self.parse_bytes_raw(len)?;
         Ok(unsafe { cells.as_ref() })
     }
 
-    pub fn parse_str(&mut self) -> Result<&'a str> {
+    pub fn parse_str(&mut self) -> Result<&'dtb str> {
         let buf = self.take_until(cell_has_nul)?;
         let len = buf.len().saturating_sub(1) * 4;
         let len = len + bytemuck::bytes_of(buf.last().unwrap()).partition_point(|x| *x != 0);
