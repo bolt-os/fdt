@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Prop","Reg"]};
+window.SIDEBAR_ITEMS = {"struct":["Prop","Range","Reg"]};

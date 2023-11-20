@@ -127,12 +127,96 @@
 <a href="#127" id="127">127</a>
 <a href="#128" id="128">128</a>
 <a href="#129" id="129">129</a>
+<a href="#130" id="130">130</a>
+<a href="#131" id="131">131</a>
+<a href="#132" id="132">132</a>
+<a href="#133" id="133">133</a>
+<a href="#134" id="134">134</a>
+<a href="#135" id="135">135</a>
+<a href="#136" id="136">136</a>
+<a href="#137" id="137">137</a>
+<a href="#138" id="138">138</a>
+<a href="#139" id="139">139</a>
+<a href="#140" id="140">140</a>
+<a href="#141" id="141">141</a>
+<a href="#142" id="142">142</a>
+<a href="#143" id="143">143</a>
+<a href="#144" id="144">144</a>
+<a href="#145" id="145">145</a>
+<a href="#146" id="146">146</a>
+<a href="#147" id="147">147</a>
+<a href="#148" id="148">148</a>
+<a href="#149" id="149">149</a>
+<a href="#150" id="150">150</a>
+<a href="#151" id="151">151</a>
+<a href="#152" id="152">152</a>
+<a href="#153" id="153">153</a>
+<a href="#154" id="154">154</a>
+<a href="#155" id="155">155</a>
+<a href="#156" id="156">156</a>
+<a href="#157" id="157">157</a>
+<a href="#158" id="158">158</a>
+<a href="#159" id="159">159</a>
+<a href="#160" id="160">160</a>
+<a href="#161" id="161">161</a>
+<a href="#162" id="162">162</a>
+<a href="#163" id="163">163</a>
+<a href="#164" id="164">164</a>
+<a href="#165" id="165">165</a>
+<a href="#166" id="166">166</a>
+<a href="#167" id="167">167</a>
+<a href="#168" id="168">168</a>
+<a href="#169" id="169">169</a>
+<a href="#170" id="170">170</a>
+<a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
 </pre></div><pre class="rust"><code><span class="comment">/*
  * Copyright (c) 2023 xvanc and contributors
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-</span><span class="kw">use crate</span>::{Cell, Error, Node, PropParser, <span class="prelude-ty">Result</span>, Parse};
+</span><span class="kw">use crate</span>::{Cell, Error, Node, Parse, PropParser, <span class="prelude-ty">Result</span>};
 <span class="kw">use </span>core::{fmt, mem::size_of, ptr::NonNull};
 <span class="kw">use </span>libsa::endian::u64_be;
 
@@ -238,6 +322,90 @@
         <span class="self">self</span>.string_list()<span class="question-mark">?
             </span>.position(|n| n == name)
             .ok_or(Error::NotFound)
+    }
+}
+
+<span class="doccomment">/// `ranges` Property
+///
+/// The `ranges` property defines a mapping between the address space of a node and
+/// the address space of the node&#39;s parent.
+///
+/// A node may contain multiple ranges, so this property should be parsed as `Vec&lt;Range&gt;`.
+/// An empty property indicates a one-to-one mapping between parent and child addresses.
+</span><span class="kw">pub struct </span>Range {
+    <span class="doccomment">/// Child Bus Address
+    ///
+    /// Physical address within the parent address space.
+    ///
+    /// The number of cells making up this value is determined by the `#address-cells`
+    /// property of this node.
+    </span><span class="kw">pub </span>child_addr: u64,
+    <span class="doccomment">/// Child Bus Address High Bits
+    ///
+    /// Certain nodes (PCI(e)) have an `#address-cells` value of 3. The high 32 bits of these
+    /// addresses are stored here.
+    </span><span class="kw">pub </span>child_addr_hi: u64,
+    <span class="doccomment">/// Parent Bus Address
+    ///
+    /// Physical address within the parent address space.
+    ///
+    /// The number of cells making up this value is determined by the `#address-cells`
+    /// property of the node which defines the parent address space.
+    </span><span class="kw">pub </span>parent_addr: u64,
+    <span class="doccomment">/// Range Size
+    ///
+    /// The size of of the range within the child address space.
+    ///
+    /// The number of cells making up this value is determined by the `#address-cells`
+    /// property of this node.
+    </span><span class="kw">pub </span>size: u64,
+}
+
+<span class="kw">impl</span>&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>: <span class="lifetime">&#39;f</span>&gt; Parse&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>&gt; <span class="kw">for </span>Range {
+    <span class="kw">fn </span>parse(parser: <span class="kw-2">&amp;mut </span>PropParser&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+        <span class="kw">let </span>child_addr_cells = parser
+            .node()
+            .try_property_as::&lt;u32&gt;(<span class="string">&quot;#address-cells&quot;</span>)<span class="question-mark">?
+            </span>.ok_or(Error::NotFound)<span class="question-mark">?</span>;
+        <span class="kw">let </span>parent_addr_cells = parser
+            .node()
+            .try_parent_property_as::&lt;u32&gt;(<span class="string">&quot;#address-cells&quot;</span>)<span class="question-mark">?
+            </span>.ok_or(Error::NotFound)<span class="question-mark">?</span>;
+        <span class="kw">let </span>size_cells = parser
+            .node()
+            .try_property_as::&lt;u32&gt;(<span class="string">&quot;#size-cells&quot;</span>)<span class="question-mark">?
+            </span>.ok_or(Error::NotFound)<span class="question-mark">?</span>;
+
+        <span class="kw">if </span>child_addr_cells &gt; <span class="number">3 </span>|| parent_addr_cells &gt; <span class="number">2 </span>|| size_cells &gt; <span class="number">2 </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidPropType);
+        }
+
+        <span class="kw">let </span>child_addr_hi = <span class="kw">match </span>child_addr_cells {
+            <span class="number">3 </span>=&gt; parser.parse::&lt;u32&gt;()<span class="question-mark">? </span><span class="kw">as </span>u64,
+            <span class="kw">_ </span>=&gt; <span class="number">0</span>,
+        };
+        <span class="kw">let </span>child_addr = <span class="kw">match </span>child_addr_cells {
+            <span class="number">3 </span>| <span class="number">2 </span>=&gt; parser.parse::&lt;u64&gt;()<span class="question-mark">?</span>,
+            <span class="number">1 </span>=&gt; parser.parse::&lt;u32&gt;()<span class="question-mark">? </span><span class="kw">as </span>u64,
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        };
+        <span class="kw">let </span>parent_addr = <span class="kw">match </span>child_addr_cells {
+            <span class="number">2 </span>=&gt; parser.parse::&lt;u64&gt;()<span class="question-mark">?</span>,
+            <span class="number">1 </span>=&gt; parser.parse::&lt;u32&gt;()<span class="question-mark">? </span><span class="kw">as </span>u64,
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        };
+        <span class="kw">let </span>size = <span class="kw">match </span>child_addr_cells {
+            <span class="number">2 </span>=&gt; parser.parse::&lt;u64&gt;()<span class="question-mark">?</span>,
+            <span class="number">1 </span>=&gt; parser.parse::&lt;u32&gt;()<span class="question-mark">? </span><span class="kw">as </span>u64,
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        };
+
+        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+            child_addr,
+            child_addr_hi,
+            parent_addr,
+            size,
+        })
     }
 }
 
