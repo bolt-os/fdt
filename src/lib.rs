@@ -13,8 +13,8 @@ pub mod parser;
 pub mod prop;
 
 pub use node::Node;
-pub use prop::Prop;
 pub use parser::{Parse, PropParser};
+pub use prop::Prop;
 
 use core::mem::size_of;
 use libsa::endian::u32_be;

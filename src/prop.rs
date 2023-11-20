@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-use crate::{Cell, Error, Node, PropParser, Result, Parse};
+use crate::{Cell, Error, Node, Parse, PropParser, Result};
 use core::{fmt, mem::size_of, ptr::NonNull};
 use libsa::endian::u64_be;
 
@@ -109,6 +109,90 @@ impl<'dtb> Prop<'dtb> {
         self.string_list()?
             .position(|n| n == name)
             .ok_or(Error::NotFound)
+    }
+}
+
+/// `ranges` Property
+///
+/// The `ranges` property defines a mapping between the address space of a node and
+/// the address space of the node's parent.
+///
+/// A node may contain multiple ranges, so this property should be parsed as `Vec<Range>`.
+/// An empty property indicates a one-to-one mapping between parent and child addresses.
+pub struct Range {
+    /// Child Bus Address
+    ///
+    /// Physical address within the parent address space.
+    ///
+    /// The number of cells making up this value is determined by the `#address-cells`
+    /// property of this node.
+    pub child_addr: u64,
+    /// Child Bus Address High Bits
+    ///
+    /// Certain nodes (PCI(e)) have an `#address-cells` value of 3. The high 32 bits of these
+    /// addresses are stored here.
+    pub child_addr_hi: u64,
+    /// Parent Bus Address
+    ///
+    /// Physical address within the parent address space.
+    ///
+    /// The number of cells making up this value is determined by the `#address-cells`
+    /// property of the node which defines the parent address space.
+    pub parent_addr: u64,
+    /// Range Size
+    ///
+    /// The size of of the range within the child address space.
+    ///
+    /// The number of cells making up this value is determined by the `#address-cells`
+    /// property of this node.
+    pub size: u64,
+}
+
+impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Range {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
+        let child_addr_cells = parser
+            .node()
+            .try_property_as::<u32>("#address-cells")?
+            .ok_or(Error::NotFound)?;
+        let parent_addr_cells = parser
+            .node()
+            .try_parent_property_as::<u32>("#address-cells")?
+            .ok_or(Error::NotFound)?;
+        let size_cells = parser
+            .node()
+            .try_property_as::<u32>("#size-cells")?
+            .ok_or(Error::NotFound)?;
+
+        if child_addr_cells > 3 || parent_addr_cells > 2 || size_cells > 2 {
+            return Err(Error::InvalidPropType);
+        }
+
+        let child_addr_hi = match child_addr_cells {
+            3 => parser.parse::<u32>()? as u64,
+            _ => 0,
+        };
+        let child_addr = match child_addr_cells {
+            3 | 2 => parser.parse::<u64>()?,
+            1 => parser.parse::<u32>()? as u64,
+            _ => unreachable!(),
+        };
+        let parent_addr = match parent_addr_cells {
+            2 => parser.parse::<u64>()?,
+            1 => parser.parse::<u32>()? as u64,
+            _ => unreachable!(),
+        };
+        let size = match size_cells {
+            2 => parser.parse::<u64>()?,
+            1 => parser.parse::<u32>()? as u64,
+            _ => unreachable!(),
+        };
+
+        Ok(Self {
+            child_addr,
+            child_addr_hi,
+            parent_addr,
+            size,
+        })
     }
 }
 
