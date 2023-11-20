@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["NodeOrProp"],"struct":["Node","NodePath","PathIter","Prop","PropHeader","Reg"]};
+window.SIDEBAR_ITEMS = {"enum":["NodeOrProp"],"struct":["Node","NodePath","PathIter","Prop","Reg"]};

@@ -197,6 +197,7 @@
 <a href="#197" id="197">197</a>
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
 </pre></div><pre class="rust"><code><span class="comment">/*
  * Copyright (c) 2023 xvanc and contributors
  * SPDX-License-Identifier: BSD-3-Clause
@@ -226,6 +227,7 @@
     InvalidSlice,
     InvalidPropType,
     InvalidUtf8,
+    MalformedDtb,
     NoData,
     <span class="doccomment">/// A requested node or property was not found
     </span>NotFound,
@@ -352,9 +354,9 @@
     }
 
     <span class="kw">pub fn </span>root(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Node&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;dtb</span>&gt; {
-        <span class="kw">let </span><span class="kw-2">mut </span>parser = Parser::new(<span class="self">self</span>, <span class="self">self</span>.tree);
+        <span class="kw">let </span><span class="kw-2">mut </span>parser = Parser::new(<span class="self">self</span>.tree);
         <span class="macro">assert!</span>(parser.bump() == <span class="prelude-val">Ok</span>(FDT_BEGIN_NODE));
-        parser.parse::&lt;Node&gt;().unwrap()
+        parser.parse_node(<span class="self">self</span>).unwrap()
     }
 
     <span class="kw">pub fn </span>try_find_node(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;Node&lt;<span class="lifetime">&#39;_</span>, <span class="lifetime">&#39;dtb</span>&gt;&gt;&gt; {
