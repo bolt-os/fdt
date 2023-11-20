@@ -10,13 +10,15 @@ extern crate alloc;
 
 pub mod node;
 pub mod parser;
+pub mod prop;
 
-pub use node::{Node, Prop};
-pub use parser::{Parse, Parser};
+pub use node::Node;
+pub use prop::Prop;
+pub use parser::{Parse, PropParser};
 
 use core::mem::size_of;
 use libsa::endian::u32_be;
-use parser::FDT_BEGIN_NODE;
+use parser::{Parser, FDT_BEGIN_NODE};
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
 
