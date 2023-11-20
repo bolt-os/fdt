@@ -3,8 +3,14 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-use crate::{Cell, Error, Fdt, Result};
-use core::{mem::size_of, ptr::NonNull};
+use crate::{node::NodeOrProp, Cell, Error, Fdt, Node, Prop, Result};
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+use core::{
+    mem::size_of,
+    ops::{Deref, DerefMut},
+    ptr::NonNull,
+};
 
 pub const FDT_BEGIN_NODE: Cell = Cell::new(0x1);
 pub const FDT_END_NODE: Cell = Cell::new(0x2);
@@ -12,23 +18,14 @@ pub const FDT_PROP: Cell = Cell::new(0x3);
 pub const FDT_NOP: Cell = Cell::new(0x4);
 pub const FDT_END: Cell = Cell::new(0x9);
 
-pub trait Parse<'f, 'dtb: 'f>: Sized {
-    fn parse(parser: &mut Parser<'f, 'dtb>) -> Result<Self>;
-}
-
-pub struct Parser<'f, 'a: 'f> {
-    pub fdt: &'f Fdt<'a>,
+pub struct Parser<'a> {
     pub(crate) data: &'a [Cell],
     pub(crate) position: usize,
 }
 
-impl<'f, 'a: 'f> Parser<'f, 'a> {
-    pub fn new(fdt: &'f Fdt<'a>, data: &'a [Cell]) -> Parser<'f, 'a> {
-        Self {
-            fdt,
-            data,
-            position: 0,
-        }
+impl<'a> Parser<'a> {
+    pub fn new(data: &'a [Cell]) -> Parser<'a> {
+        Self { data, position: 0 }
     }
 
     /// Returns `true` if the stream is empty
@@ -89,8 +86,54 @@ impl<'f, 'a: 'f> Parser<'f, 'a> {
         Ok(unsafe { cells.as_ref() })
     }
 
-    pub fn parse<T: Parse<'f, 'a>>(&mut self) -> Result<T> {
-        T::parse(self)
+    pub fn parse_str(&mut self) -> Result<&'a str> {
+        let buf = self.take_until(cell_has_nul)?;
+        let len = buf.len().saturating_sub(1) * 4;
+        let len = len + bytemuck::bytes_of(buf.last().unwrap()).partition_point(|x| *x != 0);
+        let buf = &bytemuck::cast_slice::<_, u8>(buf)[..len];
+        core::str::from_utf8(buf).map_err(|_| Error::InvalidUtf8)
+    }
+}
+
+impl<'f, 'dtb: 'f> Parser<'dtb> {
+    pub(crate) fn parse_node(&mut self, fdt: &'f Fdt<'dtb>) -> Result<Node<'f, 'dtb>> {
+        let name = self.parse_str()?;
+        let start = self.position;
+        let data = loop {
+            match self.bump()? {
+                FDT_BEGIN_NODE => {
+                    let _ = self.parse_node(fdt)?;
+                }
+                FDT_PROP => {
+                    let len = self.bump()?.get();
+                    self.parse_bytes(len as usize + 4)?;
+                }
+                FDT_NOP => {}
+                FDT_END_NODE => break &self.data[start..self.position - 1],
+                FDT_END => return Err(Error::UnexpectedEndOfStream),
+                _ => return Err(Error::MalformedDtb),
+            }
+        };
+        Ok(Node { name, data, fdt })
+    }
+
+    pub(crate) fn parse_prop(&mut self, fdt: &'f Fdt<'dtb>) -> Result<Prop<'dtb>> {
+        let len = self.bump()?.get() as usize;
+        let name = fdt.get_string(self.bump()?.get()).unwrap();
+        let data = self.parse_bytes_raw(len)?;
+        Ok(Prop { name, data })
+    }
+
+    pub(crate) fn parse_item(&mut self, fdt: &'f Fdt<'dtb>) -> Result<NodeOrProp<'f, 'dtb>> {
+        loop {
+            match self.bump()? {
+                FDT_BEGIN_NODE => break Ok(NodeOrProp::Node(self.parse_node(fdt)?)),
+                FDT_PROP => break Ok(NodeOrProp::Prop(self.parse_prop(fdt)?)),
+                FDT_NOP => (),
+                FDT_END => break Err(Error::NoData),
+                _ => return Err(Error::MalformedDtb),
+            }
+        }
     }
 }
 
@@ -99,20 +142,83 @@ fn cell_has_nul(cell: Cell) -> bool {
     x.wrapping_sub(0x01010101) & !x & 0x80808080 != 0
 }
 
+pub trait Parse<'f, 'dtb: 'f>: Sized {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self>;
+}
+
+pub struct PropParser<'f, 'dtb: 'f> {
+    node: Node<'f, 'dtb>,
+    parser: Parser<'dtb>,
+}
+
+impl<'f, 'dtb: 'f> Deref for PropParser<'f, 'dtb> {
+    type Target = Parser<'dtb>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.parser
+    }
+}
+
+impl<'f, 'dtb: 'f> DerefMut for PropParser<'f, 'dtb> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parser
+    }
+}
+
+impl<'f, 'dtb: 'f> PropParser<'f, 'dtb> {
+    pub(crate) fn new(node: &Node<'f, 'dtb>, data: &'dtb [Cell]) -> PropParser<'f, 'dtb> {
+        Self {
+            node: *node,
+            parser: Parser::new(data),
+        }
+    }
+
+    pub fn node(&self) -> &Node<'f, 'dtb> {
+        &self.node
+    }
+
+    pub fn fdt(&self) -> &'f Fdt<'dtb> {
+        self.node.fdt()
+    }
+
+    pub fn parse<T: Parse<'f, 'dtb>>(&mut self) -> Result<T> {
+        T::parse(self)
+    }
+
+    #[cfg(feature = "alloc")]
+    pub fn parse_to_end<T: Parse<'f, 'dtb>>(&mut self) -> Result<Vec<T>> {
+        let mut v = Vec::new();
+
+        while !self.is_empty() {
+            v.push(self.parse()?);
+        }
+
+        Ok(v)
+    }
+}
+
 impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Cell {
-    fn parse(parser: &mut Parser<'_, 'dtb>) -> Result<Self> {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
         parser.bump()
     }
 }
 
 impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for u32 {
-    fn parse(parser: &mut Parser<'_, 'dtb>) -> Result<Self> {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
         Ok(parser.bump()?.get())
     }
 }
 
+impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for u64 {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
+        let hi = parser.parse::<u32>()? as u64;
+        let lo = parser.parse::<u32>()? as u64;
+        Ok((hi << 32) | lo)
+    }
+}
+
 impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for usize {
-    fn parse(parser: &mut Parser<'_, 'dtb>) -> Result<Self> {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
         Ok(match size_of::<usize>() {
             4 => parser.parse::<u32>()? as usize,
             8 => {
@@ -126,12 +232,13 @@ impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for usize {
 }
 
 impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for &'dtb str {
-    fn parse(parser: &mut Parser<'_, 'dtb>) -> Result<Self> {
-        let buf = parser.take_until(cell_has_nul)?;
-        let len = buf.len().saturating_sub(1) * 4;
-        let len = len + bytemuck::bytes_of(buf.last().unwrap()).partition_point(|x| *x != 0);
-        let buf = &bytemuck::cast_slice::<_, u8>(buf)[..len];
-        let s = core::str::from_utf8(buf).unwrap();
-        Ok(s)
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
+        parser.parse_str()
+    }
+}
+
+impl<'f, 'dtb: 'f, T: Parse<'f, 'dtb>> Parse<'f, 'dtb> for Vec<T> {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
+        parser.parse_to_end()
     }
 }

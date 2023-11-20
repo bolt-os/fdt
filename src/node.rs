@@ -4,7 +4,7 @@
  */
 
 use crate::{
-    parser::{Parse, Parser, FDT_BEGIN_NODE, FDT_END, FDT_END_NODE, FDT_NOP, FDT_PROP},
+    parser::{Parse, Parser, PropParser},
     Cell, Error, Fdt, Result,
 };
 use core::mem::size_of;
@@ -36,8 +36,9 @@ impl<'f, 'dtb: 'f> Node<'f, 'dtb> {
     }
 
     pub fn items(&self) -> impl Iterator<Item = NodeOrProp<'f, 'dtb>> {
-        let mut parser = Parser::new(self.fdt, self.data);
-        core::iter::from_fn(move || match parser.parse::<NodeOrProp<'f, 'dtb>>() {
+        let mut parser = Parser::new(self.data);
+        let fdt = self.fdt;
+        core::iter::from_fn(move || match parser.parse_item(fdt) {
             Ok(item) => Some(item),
             Err(Error::NoData) => None,
             Err(error) => unreachable!("{error:?}"),
@@ -56,7 +57,7 @@ impl<'f, 'dtb: 'f> Node<'f, 'dtb> {
 
     /// Search for a specific child of this node by name
     pub fn child(&self, name: &str) -> Option<Node<'f, 'dtb>> {
-        self.children().find(|&node| node.name == name)
+        self.children().find(|node| node.name == name)
     }
 
     /// Returns the parent of this node, if any
@@ -123,7 +124,7 @@ impl<'f, 'dtb: 'f> Node<'f, 'dtb> {
 
 impl<'f, 'dtb: 'f> Node<'f, 'dtb> {
     fn parse_property<T: Parse<'f, 'dtb>>(&self, prop: Prop<'dtb>) -> Result<T> {
-        Parser::new(self.fdt(), prop.as_cell_slice()).parse()
+        PropParser::new(self, prop.as_cell_slice()).parse()
     }
 
     pub fn properties(&self) -> impl Iterator<Item = Prop<'dtb>> + 'f {
@@ -209,22 +210,12 @@ impl<'f, 'dtb: 'f> Node<'f, 'dtb> {
             .unwrap_or_default()
     }
 
-    pub fn address_cells(&self) -> Option<usize> {
-        self.inherited_property("#address-cells")
-            .and_then(|prop| prop.u32().ok().map(|x| x as usize))
-    }
-
-    pub fn size_cells(&self) -> Option<usize> {
-        self.inherited_property("#size-cells")
-            .and_then(|prop| prop.u32().ok().map(|x| x as usize))
-    }
-
     pub fn reg(&self) -> Result<impl Iterator<Item = Result<Reg>> + '_> {
         let addr_cells = self
-            .try_inherited_property_as::<u32>("#address-cells")?
+            .try_parent_property_as::<u32>("#address-cells")?
             .ok_or(Error::NotFound)? as usize;
         let size_cells = self
-            .try_inherited_property_as::<u32>("#size-cells")?
+            .try_parent_property_as::<u32>("#size-cells")?
             .ok_or(Error::NotFound)? as usize;
 
         if addr_cells != size_of::<usize>() / 4 || size_cells != size_of::<usize>() / 4 {
@@ -233,7 +224,7 @@ impl<'f, 'dtb: 'f> Node<'f, 'dtb> {
         }
 
         Ok(self.property("reg").into_iter().flat_map(|prop| {
-            let mut parser = prop.parser(self.fdt());
+            let mut parser = prop.parser(self);
             core::iter::from_fn(move || {
                 if parser.is_empty() {
                     return None;
@@ -263,7 +254,7 @@ pub struct Reg {
 }
 
 impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Reg {
-    fn parse(parser: &mut Parser<'f, 'dtb>) -> Result<Self> {
+    fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
         Ok(Reg {
             addr: parser.parse::<usize>()? as *mut u8,
             size: parser.parse()?,
@@ -274,34 +265,6 @@ impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Reg {
 impl fmt::Debug for Node<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Node({:?}, {} bytes)", self.name, self.data.len())
-    }
-}
-
-impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Node<'f, 'dtb> {
-    fn parse(parser: &mut Parser<'f, 'dtb>) -> Result<Self> {
-        let name = parser.parse::<&'dtb str>()?;
-        let start = parser.position;
-        let data = loop {
-            let cell = parser.bump()?;
-            match cell {
-                FDT_BEGIN_NODE => {
-                    let _ = parser.parse::<Self>()?;
-                }
-                FDT_PROP => {
-                    let header = parser.parse::<PropHeader>()?;
-                    parser.parse_bytes(header.size.get() as usize)?;
-                }
-                FDT_NOP => {}
-                FDT_END_NODE => break &parser.data[start..parser.position - 1],
-                FDT_END => return Err(Error::UnexpectedEndOfStream),
-                cell => unreachable!("{cell:x?}, {start}, {}", parser.position),
-            }
-        };
-        Ok(Self {
-            name,
-            data,
-            fdt: parser.fdt,
-        })
     }
 }
 
@@ -364,42 +327,15 @@ impl fmt::Display for NodePath<'_, '_> {
     }
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct PropHeader {
-    /// Total size of the property, in bytes, including the header.
-    size: Cell,
-    /// Offset of the property's name in the string table
-    name: Cell,
-}
-
-impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for PropHeader {
-    fn parse(parser: &mut Parser<'_, 'dtb>) -> Result<Self> {
-        let header = Self {
-            size: parser.parse()?,
-            name: parser.parse()?,
-        };
-        Ok(header)
-    }
-}
-
+/// Node Property
 #[derive(Clone, Copy)]
 pub struct Prop<'dtb> {
     pub name: &'dtb str,
-    data: NonNull<[u8]>,
+    pub(crate) data: NonNull<[u8]>,
 }
 
 unsafe impl Send for Prop<'_> {}
 unsafe impl Sync for Prop<'_> {}
-
-impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Prop<'dtb> {
-    fn parse(parser: &mut Parser<'_, 'dtb>) -> Result<Self> {
-        let header = parser.parse::<PropHeader>()?;
-        let name = parser.fdt.get_string(header.name.get()).unwrap();
-        let data = parser.parse_bytes_raw(header.size.get() as usize)?;
-        Ok(Self { name, data })
-    }
-}
 
 impl fmt::Debug for Prop<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -407,14 +343,22 @@ impl fmt::Debug for Prop<'_> {
     }
 }
 
-impl<'dtb> Prop<'dtb> {
-    pub(crate) fn parser<'f>(self, fdt: &'f Fdt<'dtb>) -> Parser<'f, 'dtb>
-    where
-        'dtb: 'f,
-    {
-        Parser::new(fdt, self.as_cell_slice())
+impl<'f, 'dtb: 'f> Prop<'dtb> {
+    pub(crate) fn parser(self, node: &Node<'f, 'dtb>) -> PropParser<'f, 'dtb> {
+        PropParser::new(node, self.as_cell_slice())
     }
 
+    pub fn parse<T>(
+        self,
+        node: &Node<'f, 'dtb>,
+        mut parse: impl FnMut(&mut PropParser<'f, 'dtb>) -> Result<T>,
+    ) -> Result<T> {
+        let mut parser = PropParser::new(node, self.as_cell_slice());
+        parse(&mut parser)
+    }
+}
+
+impl<'dtb> Prop<'dtb> {
     pub fn len(self) -> usize {
         self.data.len()
     }
@@ -430,15 +374,6 @@ impl<'dtb> Prop<'dtb> {
     pub fn as_cell_slice(self) -> &'dtb [Cell] {
         let ptr = NonNull::slice_from_raw_parts(self.data.cast::<Cell>(), (self.len() + 3) / 4);
         unsafe { ptr.as_ref() }
-    }
-
-    pub fn parse<T>(
-        self,
-        fdt: &Fdt<'dtb>,
-        mut parse: impl FnMut(&mut Parser<'_, 'dtb>) -> Result<T>,
-    ) -> Result<T> {
-        let mut parser = Parser::new(fdt, self.as_cell_slice());
-        parse(&mut parser)
     }
 
     pub fn cell(self) -> Result<Cell> {
@@ -500,18 +435,4 @@ impl<'dtb> Prop<'dtb> {
 pub enum NodeOrProp<'f, 'dtb: 'f> {
     Node(Node<'f, 'dtb>),
     Prop(Prop<'dtb>),
-}
-
-impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for NodeOrProp<'f, 'dtb> {
-    fn parse(parser: &mut Parser<'f, 'dtb>) -> Result<Self> {
-        loop {
-            match parser.bump()? {
-                FDT_BEGIN_NODE => break Ok(Self::Node(parser.parse()?)),
-                FDT_PROP => break Ok(Self::Prop(parser.parse()?)),
-                FDT_NOP => (),
-                FDT_END => break Err(Error::NoData),
-                cell => unreachable!("{cell:x?}, {}", parser.position),
-            }
-        }
-    }
 }

@@ -27,6 +27,7 @@ pub enum Error {
     InvalidSlice,
     InvalidPropType,
     InvalidUtf8,
+    MalformedDtb,
     NoData,
     /// A requested node or property was not found
     NotFound,
@@ -153,9 +154,9 @@ impl<'dtb> Fdt<'dtb> {
     }
 
     pub fn root(&self) -> Node<'_, 'dtb> {
-        let mut parser = Parser::new(self, self.tree);
+        let mut parser = Parser::new(self.tree);
         assert!(parser.bump() == Ok(FDT_BEGIN_NODE));
-        parser.parse::<Node>().unwrap()
+        parser.parse_node(self).unwrap()
     }
 
     pub fn try_find_node(&self, path: &str) -> Result<Option<Node<'_, 'dtb>>> {
