@@ -198,6 +198,8 @@
 <a href="#198" id="198">198</a>
 <a href="#199" id="199">199</a>
 <a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
 </pre></div><pre class="rust"><code><span class="comment">/*
  * Copyright (c) 2023 xvanc and contributors
  * SPDX-License-Identifier: BSD-3-Clause
@@ -210,13 +212,15 @@
 
 <span class="kw">pub mod </span>node;
 <span class="kw">pub mod </span>parser;
+<span class="kw">pub mod </span>prop;
 
-<span class="kw">pub use </span>node::{Node, Prop};
-<span class="kw">pub use </span>parser::{Parse, Parser};
+<span class="kw">pub use </span>node::Node;
+<span class="kw">pub use </span>prop::Prop;
+<span class="kw">pub use </span>parser::{Parse, PropParser};
 
 <span class="kw">use </span>core::mem::size_of;
 <span class="kw">use </span>libsa::endian::u32_be;
-<span class="kw">use </span>parser::FDT_BEGIN_NODE;
+<span class="kw">use </span>parser::{Parser, FDT_BEGIN_NODE};
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T, E = Error&gt; = core::result::Result&lt;T, E&gt;;
 
