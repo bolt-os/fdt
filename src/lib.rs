@@ -173,6 +173,7 @@ impl<'dtb> Fdt<'dtb> {
         self.find_node("/cpus")
             .into_iter()
             .flat_map(|node| node.children())
+            .filter(|node| matches!(node.try_property_as("device_type"), Ok(Some("cpu"))))
     }
 
     pub fn try_property_as<'f, T: Parse<'f, 'dtb>>(&'f self, path: &str) -> Result<Option<T>>
