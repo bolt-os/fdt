@@ -17,7 +17,7 @@ pub use parser::{Parse, PropParser};
 pub use prop::Prop;
 
 use core::mem::size_of;
-use libsa::endian::u32_be;
+use libsa::endian::{u32_be, u64_be};
 use parser::{Parser, FDT_BEGIN_NODE};
 
 pub type Result<T, E = Error> = core::result::Result<T, E>;
@@ -87,6 +87,8 @@ pub type Cell = u32_be;
 pub struct Fdt<'dtb> {
     dtb: &'dtb [u8],
     header: &'dtb FdtHeader,
+    /// Memory Reservation Block
+    pub memory_reservations: &'dtb [MemoryReservation],
     tree: &'dtb [Cell],
     strs: &'dtb str,
 }
@@ -130,9 +132,27 @@ impl<'dtb> Fdt<'dtb> {
             &dtb[header.string_offset.get() as usize..][..header.string_size.get() as usize],
         )
         .map_err(|_| Error::InvalidUtf8)?;
+
+        let memory_reservations = {
+            let mut len = 0;
+            let offset = header.rsvmap_offset.get() as usize;
+            let entry_size = size_of::<MemoryReservation>();
+            loop {
+                let offset = offset + len * entry_size;
+                let entry =
+                    bytemuck::try_from_bytes::<MemoryReservation>(&dtb[offset..][..entry_size])?;
+                if entry.addr == 0 && entry.size == 0 {
+                    break;
+                }
+                len += 1;
+            }
+            bytemuck::try_cast_slice::<_, MemoryReservation>(&dtb[offset..][..entry_size * len])?
+        };
+
         Ok(Fdt {
             dtb,
             header,
+            memory_reservations,
             tree,
             strs,
         })
@@ -200,4 +220,12 @@ impl<'dtb> Fdt<'dtb> {
         let node = self.find_node(path)?;
         node.property_as::<T>(prop_name)
     }
+}
+
+/// Memory Reservation Block Entry
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct MemoryReservation {
+    pub addr: u64_be,
+    pub size: u64_be,
 }
