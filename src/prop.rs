@@ -199,15 +199,37 @@ impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Range {
 /// `reg` Property
 #[derive(Debug)]
 pub struct Reg {
-    pub addr: *mut u8,
-    pub size: usize,
+    pub addr: u64,
+    pub size: u64,
 }
 
 impl<'f, 'dtb: 'f> Parse<'f, 'dtb> for Reg {
     fn parse(parser: &mut PropParser<'f, 'dtb>) -> Result<Self> {
-        Ok(Reg {
-            addr: parser.parse::<usize>()? as *mut u8,
-            size: parser.parse()?,
-        })
+        let addr_cells = parser
+            .node()
+            .try_parent_property_as::<u32>("#address-cells")?
+            .unwrap_or(2);
+        let size_cells = parser
+            .node()
+            .try_parent_property_as::<u32>("#size-cells")?
+            .unwrap_or(1);
+
+        if addr_cells > 2 || size_cells > 2 {
+            return Err(Error::InvalidPropType);
+        }
+
+        let addr = match addr_cells {
+            2 => parser.parse::<u64>()?,
+            1 => parser.parse::<u32>()? as u64,
+            _ => return Err(Error::InvalidPropType),
+        };
+        let size = match size_cells {
+            2 => parser.parse::<u64>()?,
+            1 => parser.parse::<u32>()? as u64,
+            0 => 0,
+            _ => unreachable!(),
+        };
+
+        Ok(Reg { addr, size })
     }
 }
