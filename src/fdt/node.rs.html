@@ -302,20 +302,6 @@
 <a href="#302" id="302">302</a>
 <a href="#303" id="303">303</a>
 <a href="#304" id="304">304</a>
-<a href="#305" id="305">305</a>
-<a href="#306" id="306">306</a>
-<a href="#307" id="307">307</a>
-<a href="#308" id="308">308</a>
-<a href="#309" id="309">309</a>
-<a href="#310" id="310">310</a>
-<a href="#311" id="311">311</a>
-<a href="#312" id="312">312</a>
-<a href="#313" id="313">313</a>
-<a href="#314" id="314">314</a>
-<a href="#315" id="315">315</a>
-<a href="#316" id="316">316</a>
-<a href="#317" id="317">317</a>
-<a href="#318" id="318">318</a>
 </pre></div><pre class="rust"><code><span class="comment">/*
  * Copyright (c) 2023 xvanc and contributors
  * SPDX-License-Identifier: BSD-3-Clause
@@ -327,7 +313,6 @@
     Cell, Error, Fdt, Prop, <span class="prelude-ty">Result</span>,
 };
 <span class="kw">use </span>core::fmt;
-<span class="kw">use </span>core::mem::size_of;
 
 <span class="attr">#[derive(Clone, Copy)]
 </span><span class="kw">pub struct </span>Node&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>: <span class="lifetime">&#39;f</span>&gt; {
@@ -529,25 +514,12 @@
     }
 
     <span class="kw">pub fn </span>reg(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="kw">impl </span>Iterator&lt;Item = <span class="prelude-ty">Result</span>&lt;Reg&gt;&gt; + <span class="lifetime">&#39;_</span>&gt; {
-        <span class="kw">let </span>addr_cells = <span class="self">self
-            </span>.try_parent_property_as::&lt;u32&gt;(<span class="string">&quot;#address-cells&quot;</span>)<span class="question-mark">?
-            </span>.ok_or(Error::NotFound)<span class="question-mark">? </span><span class="kw">as </span>usize;
-        <span class="kw">let </span>size_cells = <span class="self">self
-            </span>.try_parent_property_as::&lt;u32&gt;(<span class="string">&quot;#size-cells&quot;</span>)<span class="question-mark">?
-            </span>.ok_or(Error::NotFound)<span class="question-mark">? </span><span class="kw">as </span>usize;
-
-        <span class="kw">if </span>addr_cells != size_of::&lt;usize&gt;() / <span class="number">4 </span>|| size_cells != size_of::&lt;usize&gt;() / <span class="number">4 </span>{
-            <span class="comment">// XXX: should have a better error.
-            </span><span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidPropType);
-        }
-
         <span class="prelude-val">Ok</span>(<span class="self">self</span>.property(<span class="string">&quot;reg&quot;</span>).into_iter().flat_map(|prop| {
             <span class="kw">let </span><span class="kw-2">mut </span>parser = prop.parser(<span class="self">self</span>);
-            core::iter::from_fn(<span class="kw">move </span>|| {
-                <span class="kw">if </span>parser.is_empty() {
-                    <span class="kw">return </span><span class="prelude-val">None</span>;
-                }
-                <span class="prelude-val">Some</span>(parser.parse())
+            core::iter::from_fn(<span class="kw">move </span>|| <span class="kw">match </span>parser.parse() {
+                <span class="prelude-val">Ok</span>(reg) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Ok</span>(reg)),
+                <span class="prelude-val">Err</span>(Error::NoData) =&gt; <span class="prelude-val">None</span>,
+                <span class="prelude-val">Err</span>(error) =&gt; <span class="prelude-val">Some</span>(<span class="prelude-val">Err</span>(error)),
             })
         }))
     }

@@ -211,6 +211,28 @@
 <a href="#211" id="211">211</a>
 <a href="#212" id="212">212</a>
 <a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
+<a href="#232" id="232">232</a>
+<a href="#233" id="233">233</a>
+<a href="#234" id="234">234</a>
+<a href="#235" id="235">235</a>
 </pre></div><pre class="rust"><code><span class="comment">/*
  * Copyright (c) 2023 xvanc and contributors
  * SPDX-License-Identifier: BSD-3-Clause
@@ -412,16 +434,38 @@
 <span class="doccomment">/// `reg` Property
 </span><span class="attr">#[derive(Debug)]
 </span><span class="kw">pub struct </span>Reg {
-    <span class="kw">pub </span>addr: <span class="kw-2">*mut </span>u8,
-    <span class="kw">pub </span>size: usize,
+    <span class="kw">pub </span>addr: u64,
+    <span class="kw">pub </span>size: u64,
 }
 
 <span class="kw">impl</span>&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>: <span class="lifetime">&#39;f</span>&gt; Parse&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>&gt; <span class="kw">for </span>Reg {
     <span class="kw">fn </span>parse(parser: <span class="kw-2">&amp;mut </span>PropParser&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
-        <span class="prelude-val">Ok</span>(Reg {
-            addr: parser.parse::&lt;usize&gt;()<span class="question-mark">? </span><span class="kw">as </span><span class="kw-2">*mut </span>u8,
-            size: parser.parse()<span class="question-mark">?</span>,
-        })
+        <span class="kw">let </span>addr_cells = parser
+            .node()
+            .try_parent_property_as::&lt;u32&gt;(<span class="string">&quot;#address-cells&quot;</span>)<span class="question-mark">?
+            </span>.unwrap_or(<span class="number">2</span>);
+        <span class="kw">let </span>size_cells = parser
+            .node()
+            .try_parent_property_as::&lt;u32&gt;(<span class="string">&quot;#size-cells&quot;</span>)<span class="question-mark">?
+            </span>.unwrap_or(<span class="number">1</span>);
+
+        <span class="kw">if </span>addr_cells &gt; <span class="number">2 </span>|| size_cells &gt; <span class="number">2 </span>{
+            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidPropType);
+        }
+
+        <span class="kw">let </span>addr = <span class="kw">match </span>addr_cells {
+            <span class="number">2 </span>=&gt; parser.parse::&lt;u64&gt;()<span class="question-mark">?</span>,
+            <span class="number">1 </span>=&gt; parser.parse::&lt;u32&gt;()<span class="question-mark">? </span><span class="kw">as </span>u64,
+            <span class="kw">_ </span>=&gt; <span class="kw">return </span><span class="prelude-val">Err</span>(Error::InvalidPropType),
+        };
+        <span class="kw">let </span>size = <span class="kw">match </span>size_cells {
+            <span class="number">2 </span>=&gt; parser.parse::&lt;u64&gt;()<span class="question-mark">?</span>,
+            <span class="number">1 </span>=&gt; parser.parse::&lt;u32&gt;()<span class="question-mark">? </span><span class="kw">as </span>u64,
+            <span class="number">0 </span>=&gt; <span class="number">0</span>,
+            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(),
+        };
+
+        <span class="prelude-val">Ok</span>(Reg { addr, size })
     }
 }
 </code></pre></div></section></main></body></html>

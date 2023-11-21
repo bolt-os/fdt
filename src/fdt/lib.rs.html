@@ -200,6 +200,7 @@
 <a href="#200" id="200">200</a>
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
 </pre></div><pre class="rust"><code><span class="comment">/*
  * Copyright (c) 2023 xvanc and contributors
  * SPDX-License-Identifier: BSD-3-Clause
@@ -375,6 +376,7 @@
         <span class="self">self</span>.find_node(<span class="string">&quot;/cpus&quot;</span>)
             .into_iter()
             .flat_map(|node| node.children())
+            .filter(|node| <span class="macro">matches!</span>(node.try_property_as(<span class="string">&quot;device_type&quot;</span>), <span class="prelude-val">Ok</span>(<span class="prelude-val">Some</span>(<span class="string">&quot;cpu&quot;</span>))))
     }
 
     <span class="kw">pub fn </span>try_property_as&lt;<span class="lifetime">&#39;f</span>, T: Parse&lt;<span class="lifetime">&#39;f</span>, <span class="lifetime">&#39;dtb</span>&gt;&gt;(<span class="kw-2">&amp;</span><span class="lifetime">&#39;f </span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;
