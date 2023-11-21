@@ -9,7 +9,6 @@ use crate::{
     Cell, Error, Fdt, Prop, Result,
 };
 use core::fmt;
-use core::mem::size_of;
 
 #[derive(Clone, Copy)]
 pub struct Node<'f, 'dtb: 'f> {
@@ -211,25 +210,12 @@ impl<'f, 'dtb: 'f> Node<'f, 'dtb> {
     }
 
     pub fn reg(&self) -> Result<impl Iterator<Item = Result<Reg>> + '_> {
-        let addr_cells = self
-            .try_parent_property_as::<u32>("#address-cells")?
-            .ok_or(Error::NotFound)? as usize;
-        let size_cells = self
-            .try_parent_property_as::<u32>("#size-cells")?
-            .ok_or(Error::NotFound)? as usize;
-
-        if addr_cells != size_of::<usize>() / 4 || size_cells != size_of::<usize>() / 4 {
-            // XXX: should have a better error.
-            return Err(Error::InvalidPropType);
-        }
-
         Ok(self.property("reg").into_iter().flat_map(|prop| {
             let mut parser = prop.parser(self);
-            core::iter::from_fn(move || {
-                if parser.is_empty() {
-                    return None;
-                }
-                Some(parser.parse())
+            core::iter::from_fn(move || match parser.parse() {
+                Ok(reg) => Some(Ok(reg)),
+                Err(Error::NoData) => None,
+                Err(error) => Some(Err(error)),
             })
         }))
     }
