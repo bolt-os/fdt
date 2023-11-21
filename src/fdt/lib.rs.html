@@ -201,6 +201,34 @@
 <a href="#201" id="201">201</a>
 <a href="#202" id="202">202</a>
 <a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
+<a href="#225" id="225">225</a>
+<a href="#226" id="226">226</a>
+<a href="#227" id="227">227</a>
+<a href="#228" id="228">228</a>
+<a href="#229" id="229">229</a>
+<a href="#230" id="230">230</a>
+<a href="#231" id="231">231</a>
 </pre></div><pre class="rust"><code><span class="comment">/*
  * Copyright (c) 2023 xvanc and contributors
  * SPDX-License-Identifier: BSD-3-Clause
@@ -220,7 +248,7 @@
 <span class="kw">pub use </span>prop::Prop;
 
 <span class="kw">use </span>core::mem::size_of;
-<span class="kw">use </span>libsa::endian::u32_be;
+<span class="kw">use </span>libsa::endian::{u32_be, u64_be};
 <span class="kw">use </span>parser::{Parser, FDT_BEGIN_NODE};
 
 <span class="kw">pub type </span><span class="prelude-ty">Result</span>&lt;T, E = Error&gt; = core::result::Result&lt;T, E&gt;;
@@ -290,6 +318,8 @@
 </span><span class="kw">pub struct </span>Fdt&lt;<span class="lifetime">&#39;dtb</span>&gt; {
     dtb: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dtb </span>[u8],
     header: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dtb </span>FdtHeader,
+    <span class="doccomment">/// Memory Reservation Block
+    </span><span class="kw">pub </span>memory_reservations: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dtb </span>[MemoryReservation],
     tree: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dtb </span>[Cell],
     strs: <span class="kw-2">&amp;</span><span class="lifetime">&#39;dtb </span>str,
 }
@@ -333,9 +363,27 @@
             <span class="kw-2">&amp;</span>dtb[header.string_offset.get() <span class="kw">as </span>usize..][..header.string_size.get() <span class="kw">as </span>usize],
         )
         .map_err(|<span class="kw">_</span>| Error::InvalidUtf8)<span class="question-mark">?</span>;
+
+        <span class="kw">let </span>memory_reservations = {
+            <span class="kw">let </span><span class="kw-2">mut </span>len = <span class="number">0</span>;
+            <span class="kw">let </span>offset = header.rsvmap_offset.get() <span class="kw">as </span>usize;
+            <span class="kw">let </span>entry_size = size_of::&lt;MemoryReservation&gt;();
+            <span class="kw">loop </span>{
+                <span class="kw">let </span>offset = offset + len * entry_size;
+                <span class="kw">let </span>entry =
+                    bytemuck::try_from_bytes::&lt;MemoryReservation&gt;(<span class="kw-2">&amp;</span>dtb[offset..][..entry_size])<span class="question-mark">?</span>;
+                <span class="kw">if </span>entry.addr == <span class="number">0 </span>&amp;&amp; entry.size == <span class="number">0 </span>{
+                    <span class="kw">break</span>;
+                }
+                len += <span class="number">1</span>;
+            }
+            bytemuck::try_cast_slice::&lt;<span class="kw">_</span>, MemoryReservation&gt;(<span class="kw-2">&amp;</span>dtb[offset..][..entry_size * len])<span class="question-mark">?
+        </span>};
+
         <span class="prelude-val">Ok</span>(Fdt {
             dtb,
             header,
+            memory_reservations,
             tree,
             strs,
         })
@@ -403,5 +451,13 @@
         <span class="kw">let </span>node = <span class="self">self</span>.find_node(path)<span class="question-mark">?</span>;
         node.property_as::&lt;T&gt;(prop_name)
     }
+}
+
+<span class="doccomment">/// Memory Reservation Block Entry
+</span><span class="attr">#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+</span><span class="kw">pub struct </span>MemoryReservation {
+    <span class="kw">pub </span>addr: u64_be,
+    <span class="kw">pub </span>size: u64_be,
 }
 </code></pre></div></section></main></body></html>
