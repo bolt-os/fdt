@@ -89,7 +89,11 @@ impl<'dtb> Parser<'dtb> {
     pub fn parse_str(&mut self) -> Result<&'dtb str> {
         let buf = self.take_until(cell_has_nul)?;
         let len = buf.len().saturating_sub(1) * 4;
-        let len = len + bytemuck::bytes_of(buf.last().unwrap()).partition_point(|x| *x != 0);
+        let len = len
+            + bytemuck::bytes_of(buf.last().unwrap())
+                .iter()
+                .position(|x| *x == 0)
+                .unwrap();
         let buf = &bytemuck::cast_slice::<_, u8>(buf)[..len];
         core::str::from_utf8(buf).map_err(|_| Error::InvalidUtf8)
     }
